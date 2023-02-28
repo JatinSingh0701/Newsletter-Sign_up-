@@ -1,0 +1,42 @@
+.jumbotron {
+    margin: 0 auto;
+    max-width: 800px;
+    text-align: center;
+    padding: 50px;
+    background-color: #f5f5f5;
+    border-radius: 10px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.display-4 {
+    font-size: 3rem;
+    font-weight: bold;
+    margin-bottom: 30px;
+}
+
+.lead {
+    font-size: 1.5rem;
+    margin-bottom: 30px;
+}
+
+.my-4 {
+    border-color: #999999;
+    border-width: 2px;
+}
+
+.discount-code {
+    font-weight: bold;
+    background-color: #f5f5f5;
+    border-radius: 5px;
+    padding: 5px 10px;
+}
+
+.btn-primary {
+    background-color: #00cc66;
+    border-color: #00cc66;
+}
+
+.btn-primary:hover {
+    background-color: #00994d;
+    border-color: #00994d;
+}
