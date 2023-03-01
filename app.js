@@ -54,7 +54,7 @@ app.post("/", (req, res) => {
 
     // Send the JSON data to the Mailchimp API using an HTTPS request
 
-    const apiKey = "5fa56c79d8d489460835c7da1dbed27e-us12";
+    const apiKey = "9b04ea33d5d932457e55832b700eb524-us12";
     const audienceId = "8a35e2a557";
 
     const url = `https://us12.api.mailchimp.com/3.0/lists/${audienceId}`;
