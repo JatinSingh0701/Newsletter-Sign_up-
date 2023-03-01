@@ -3,62 +3,51 @@ const bodyParser = require("body-parser");
 const https = require("https");
 const path = require("path");
 
+// Load Mailchimp API credentials from a separate file or environment variables
+const { apiKey, audienceId } = require("./mailchimp");
+
 const app = express();
 
 // Serve static files from the public folder
-
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Parse request bodies encoded in urlencoded format
-
 app.use(bodyParser.urlencoded({ extended: true }));
 
 // Handle GET requests to the root URL
-
 app.get("/", (req, res) => {
-    // Send the signup.html file
-
     res.sendFile(path.join(__dirname + "/signup.html"));
-
 });
 
 // Handle POST requests to the root URL
-
 app.post("/", (req, res) => {
 
-    // Extract the first name, last name, and email from the request body
-
-    const firstName = req.body.fname;
-    const lastName = req.body.lname;
-    const email = req.body.email;
+    // Validate request body
+    const { fname, lname, email } = req.body;
+    if (!fname || !lname || !email) {
+        res.status(400).send("Missing required fields");
+        return;
+    }
 
     // Construct the data object to send to the Mailchimp API
-
     const data = {
-
         members: [
             {
                 email_address: email,
                 status: "subscribed",
                 merge_fields: {
-                    FNAME: firstName,
-                    LNAME: lastName,
+                    FNAME: fname,
+                    LNAME: lname,
                 }
             }
         ]
     }
 
     // Convert the data object to JSON
-
     const jsonData = JSON.stringify(data);
 
     // Send the JSON data to the Mailchimp API using an HTTPS request
-
-    const apiKey = "9b04ea33d5d932457e55832b700eb524-us12";
-    const audienceId = "8a35e2a557";
-
     const url = `https://us12.api.mailchimp.com/3.0/lists/${audienceId}`;
-
     const options = {
         method: "POST",
         auth: `jatin1:${apiKey}`
@@ -67,54 +56,45 @@ app.post("/", (req, res) => {
     const request = https.request(url, options, (response) => {
 
         // Handle response from the Mailchimp API
-
-        if (response.statusCode === 200) {
-            // If successful, send the success.html file
-
-            res.sendFile(path.join(__dirname + "/success.html"));
-        } else {
-            // If not successful, send the failure.html file
-
-            res.sendFile(path.join(__dirname + "/failure.html"));
-        }
-        // Log the response data to the console
-
+        let responseData = "";
         response.on("data", (data) => {
-
-            console.log(JSON.parse(data));
-
+            responseData += data;
         });
 
+        response.on("end", () => {
+            const result = JSON.parse(responseData);
+            if (response.statusCode === 200) {
+                // If successful, send the success.html file
+                res.sendFile(path.join(__dirname + "/success.html"));
+            } else {
+                // If not successful, send the failure.html file
+                res.sendFile(path.join(__dirname + "/failure.html"));
+            }
+        });
     });
-    // Write the JSON data to the request body and end the request
 
+    // Add error handling for network errors or errors returned by the Mailchimp API
+    request.on("error", (error) => {
+        console.error(error);
+        res.status(500).send("An error occurred");
+    });
+
+    // Write the JSON data to the request body and end the request
     request.write(jsonData);
     request.end();
-
 });
 
 // Handle POST requests to the failure and success URLs by redirecting to the root URL
-
 app.post("/failure", (req, res) => {
-
-res.redirect("/")
-
-})
-
-app.post("/success", (req, res) => {
-
-res.redirect("/")
-
-})
-
-// Start the server and listen on port 3000
-
-app.listen(process.env.PORT || 3000 , () => {
-
-console.log("Server is running ");
-
+    res.redirect("/");
 });
 
+app.post("/success", (req, res) => {
+    res.redirect("/");
+});
 
-
-
+// Start the server and listen on the specified port
+const port = process.env.PORT || 3000;
+app.listen(port, ()=>{
+    console.log("server is running");
+})
