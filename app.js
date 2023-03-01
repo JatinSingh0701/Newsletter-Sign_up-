@@ -2,8 +2,7 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const https = require("https");
 const path = require("path");
-
-// Load Mailchimp API credentials from a separate file or environment variables
+const mailchimp = require("@mailchimp/mailchimp_marketing");
 const { apiKey, audienceId } = require("./mailchimp");
 
 const app = express();
@@ -14,23 +13,26 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Parse request bodies encoded in urlencoded format
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// Handle GET requests to the root URL
-app.get("/", (req, res) => {
-    res.sendFile(path.join(__dirname + "/signup.html"));
+// Set up Mailchimp API key and server prefix
+mailchimp.setConfig({
+    apiKey: apiKey,
+    server: apiKey.split('-')[1],
 });
 
-// Handle POST requests to the root URL
-app.post("/", (req, res) => {
-
-    // Validate request body
-    const { fname, lname, email } = req.body;
-    if (!fname || !lname || !email) {
-        res.status(400).send("Missing required fields");
-        return;
+// Validate that the Mailchimp API key is valid by calling the ping endpoint
+async function validateApiKey() {
+    try {
+        const response = await mailchimp.ping.get();
+        console.log("Mailchimp API key is valid.");
+    } catch (error) {
+        console.error("Error validating Mailchimp API key:", error);
+        process.exit(1);
     }
+}
 
-    // Construct the data object to send to the Mailchimp API
-    const data = {
+// Construct the data object to send to the Mailchimp API
+function constructDataObject(fname, lname, email) {
+    return {
         members: [
             {
                 email_address: email,
@@ -38,50 +40,69 @@ app.post("/", (req, res) => {
                 merge_fields: {
                     FNAME: fname,
                     LNAME: lname,
-                }
-            }
-        ]
+                },
+            },
+        ],
+    };
+}
+
+// Send the data object to the Mailchimp API using an HTTPS request
+function sendDataToMailchimp(data) {
+    return new Promise((resolve, reject) => {
+        const jsonData = JSON.stringify(data);
+        const url = `https://${mailchimp.getApiUrlBase()}/lists/${audienceId}`;
+        const options = {
+            method: "POST",
+            auth: `jatin1:${apiKey}`,
+        };
+        const request = https.request(url, options, (response) => {
+            let responseData = "";
+            response.on("data", (data) => {
+                responseData += data;
+            });
+            response.on("end", () => {
+                const result = JSON.parse(responseData);
+                resolve(result);
+            });
+        });
+        request.on("error", (error) => {
+            console.error("Error sending data to Mailchimp:", error);
+            reject(error);
+        });
+        request.write(jsonData);
+        request.end();
+    });
+}
+
+// Handle GET requests to the root URL
+app.get("/", (req, res) => {
+    res.sendFile(path.join(__dirname, "signup.html"));
+});
+
+// Handle POST requests to the root URL
+app.post("/", async (req, res) => {
+    const { fname, lname, email } = req.body;
+    if (!fname || !lname || !email) {
+        res.status(400).send("Missing required fields");
+        return;
     }
 
-    // Convert the data object to JSON
-    const jsonData = JSON.stringify(data);
+    // Validate the Mailchimp API key before sending data to the API
+    await validateApiKey();
 
-    // Send the JSON data to the Mailchimp API using an HTTPS request
-    const url = `https://us12.api.mailchimp.com/3.0/lists/${audienceId}`;
-    const options = {
-        method: "POST",
-        auth: `jatin1:${apiKey}`
-    };
-
-    const request = https.request(url, options, (response) => {
-
-        // Handle response from the Mailchimp API
-        let responseData = "";
-        response.on("data", (data) => {
-            responseData += data;
-        });
-
-        response.on("end", () => {
-            const result = JSON.parse(responseData);
-            if (response.statusCode === 200) {
-                // If successful, send the success.html file
-                res.sendFile(path.join(__dirname + "/success.html"));
-            } else {
-                // If not successful, send the failure.html file
-                res.sendFile(path.join(__dirname + "/failure.html"));
-            }
-        });
-    });
-
-    // Add error handling for network errors or errors returned by the Mailchimp API
-    request.on("error", (error) => {
+    const data = constructDataObject(fname, lname, email);
+    try {
+        const result = await sendDataToMailchimp(data);
+        if (result.error_count === 0) {
+            res.sendFile(path.join(__dirname, "success.html"));
+        } else {
+            console.error(result.errors);
+            res.sendFile(path.join(__dirname, "failure.html"));
+        }
+    } catch (error) {
         console.error(error);
-        res.status(500).send("An error occurred");
-    });
-
-    // Write the JSON data to the request body and end the request
-    request.write(jsonData);
-    request.end();
+        res.sendFile(path.join(__dirname, "failure.html"));
+    }
 });
 
 // Handle POST requests to the failure and success URLs by redirecting to the root URL
@@ -94,7 +115,13 @@ app.post("/success", (req, res) => {
 });
 
 // Start the server and listen on the specified port
+
 const port = process.env.PORT || 3000;
-app.listen(port, ()=>{
-    console.log("server is running");
-})
+
+try {
+    app.listen(port, () => {
+        console.log(`Server is running on port ${port}`);
+    });
+} catch (error) {
+    console.error(`Error starting server: ${error.message}`);
+}
